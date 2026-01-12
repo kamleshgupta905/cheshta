@@ -1,0 +1,7 @@
+{
+  "name": "Chestha IT Solution | Innovative Technology Partners",
+  "description": "Leading IT solution provider specializing in web development, mobile apps, and digital growth strategies.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
