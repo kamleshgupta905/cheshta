@@ -59,54 +59,29 @@ const bookDemoTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
-      fullName: { type: Type.STRING },
-      mobileNumber: { type: Type.STRING },
-      emailAddress: { type: Type.STRING },
-      preferredTime: { type: Type.STRING },
+      fullName: { type: Type.STRING, description: 'The full name of the client.' },
+      mobileNumber: { type: Type.STRING, description: 'Mobile number of the client.' },
+      emailAddress: { type: Type.STRING, description: 'Email address of the client.' },
+      preferredTime: { type: Type.STRING, description: 'The time slot preferred by the client for the demo.' },
     },
     required: ['fullName', 'mobileNumber', 'emailAddress', 'preferredTime'],
   },
 };
 
-const CHESHTA_SYSTEM_INSTRUCTION = `You are an AI Voice Business Consultant for Cheshta IT Solution.
-Your job is to handle website visitors professionally, understand their business needs, and convert them into qualified leads by booking a FREE 10-minute demo meeting.
+const CHESHTA_SYSTEM_INSTRUCTION = `You are a female AI Business Consultant for Cheshta IT Solution.
+Your goal: Book a FREE 10-minute demo meeting with visitors.
 
-Language & Tone:
-• Speak in simple Hinglish (Hindi + English)
-• Friendly, confident, and professional
-• Natural human-like conversation (never robotic)
-• Short, clear, and easy-to-understand responses
+TONE: Friendly, Professional, Hinglish (Hindi + English). Use feminine Hindi grammar for yourself (e.g., "Main kar sakti hoon").
 
-Persona Details:
-• GENDER: You are FEMALE. Use feminine grammar in Hindi naturally (e.g. use "karti hoon", "sakati hoon", "rahi hoon").
-• VISITOR: Assume the visitor is MALE. Address him as "Sir" or use masculine Hindi grammar when referring to him (e.g., "Aap kaise hain?", "Kya aap bata sakte hain?").
-• IDENTITY: You work FOR Cheshta IT Solution. You are a consultant, NOT the owner.
+PROCESS:
+1. Greet as "Sir" (assume user is male).
+2. Ask about their business.
+3. Identify their problem (SEO, Web Dev, Ads).
+4. Pitch the FREE 10-minute demo.
+5. IF THEY AGREE, you MUST collect: Full Name, Mobile, Email, and Preferred Time.
+6. ONCE YOU HAVE ALL 4 DETAILS, immediately call the 'bookDemoMeeting' tool. DO NOT wait for more instructions.
 
-Your Core Responsibilities:
-• Greet website visitors politely.
-• Introduce yourself as “Cheshta IT Solution AI Assistant”.
-• Understand the visitor’s business type.
-• Identify their main challenge (leads, sales, marketing, automation).
-• Explain relevant solutions clearly.
-• Guide the conversation toward booking a FREE 10-minute demo meeting.
-
-Services You Can Offer:
-🔹 Digital Marketing: Web Dev, SEO, Google/FB Ads, Social Media.
-🔹 AI & Automation: Voice Call Bots, AI Assistants, WhatsApp Automation.
-
-Conversation Flow:
-1. Greet the visitor as "Sir" and introduce yourself.
-2. Ask about his business type.
-3. Ask about his growth challenges.
-4. Provide a solution and offer the FREE 10-minute demo.
-5. Explain demo value: Analysis, Strategy, and Roadmap.
-6. Book details if agreed: Name -> Mobile -> Email -> Preferred Time.
-7. Confirm professionally.
-
-Important Rules:
-• Never ask multiple questions at once.
-• Keep moving toward the demo booking.
-• Consistently use feminine grammar for yourself and masculine for the user.`;
+CRITICAL: After booking, tell the user that "Meeting schedule ho gayi hai, aapko email mil jayega".`;
 
 export const AiAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -125,7 +100,6 @@ export const AiAssistant: React.FC = () => {
   const inputCtxRef = useRef<AudioContext | null>(null);
   const outputCtxRef = useRef<AudioContext | null>(null);
 
-  // Notify parent window when the assistant opens or closes
   useEffect(() => {
     if (isOpen) {
       window.parent.postMessage('ai_assistant_opened', '*');
@@ -203,10 +177,6 @@ export const AiAssistant: React.FC = () => {
     setErrorMsg('');
     
     try {
-      if ((window as any).aistudio && !(await (window as any).aistudio.hasSelectedApiKey())) {
-        await (window as any).aistudio.openSelectKey();
-      }
-
       const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       inputCtxRef.current = inputCtx;
@@ -238,7 +208,7 @@ export const AiAssistant: React.FC = () => {
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         callbacks: {
           onopen: () => {
-            const trigger = "Greet the male visitor as 'Sir' professionally. Introduce yourself as the Cheshta IT Solution AI Assistant (female voice). Ask him what business he runs.";
+            const trigger = "Greet the visitor as 'Sir' and introduce yourself as Cheshta IT's AI Consultant. Ask about his business.";
             sessionPromise.then(s => s.sendRealtimeInput({ text: trigger }));
             
             const source = inputCtx.createMediaStreamSource(stream);
@@ -248,16 +218,9 @@ export const AiAssistant: React.FC = () => {
               const int16 = new Int16Array(inputData.length);
               for (let i = 0; i < inputData.length; i++) int16[i] = inputData[i] * 32768;
               sessionPromise.then(s => {
-                try {
-                  s.sendRealtimeInput({ 
-                    media: { 
-                      data: encode(new Uint8Array(int16.buffer)), 
-                      mimeType: 'audio/pcm;rate=16000' 
-                    } 
-                  });
-                } catch (err) {
-                  console.error("Failed to send audio input", err);
-                }
+                s.sendRealtimeInput({ 
+                  media: { data: encode(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } 
+                });
               }).catch(() => {});
             };
             source.connect(scriptProcessor);
@@ -271,23 +234,34 @@ export const AiAssistant: React.FC = () => {
             if (message.toolCall) {
               for (const fc of message.toolCall.functionCalls) {
                 if (fc.name === 'bookDemoMeeting') {
-                   setMode('sending');
+                   console.log("Tool call detected:", fc.args);
                    try {
-                     await fetch('https://formsubmit.co/ajax/kamleshg9569@gmail.com', { 
+                     const response = await fetch('https://formsubmit.co/ajax/kamleshg9569@gmail.com', { 
                        method: 'POST', 
-                       headers: { 'Content-Type': 'application/json' }, 
+                       headers: { 
+                         'Content-Type': 'application/json',
+                         'Accept': 'application/json'
+                       }, 
                        body: JSON.stringify({
-                         ...fc.args,
-                         _subject: "Meeting Booked: Cheshta IT Solution Demo",
-                         _cc: fc.args.emailAddress, 
-                         message: `A new demo meeting has been scheduled.\n\nVisitor: ${fc.args.fullName}\nEmail: ${fc.args.emailAddress}\nMobile: ${fc.args.mobileNumber}\nTime: ${fc.args.preferredTime}\n\nLead generated by Cheshta AI.`
+                         name: fc.args.fullName,
+                         email: fc.args.emailAddress,
+                         phone: fc.args.mobileNumber,
+                         time: fc.args.preferredTime,
+                         _subject: `New Lead: ${fc.args.fullName} via AI Chatbot`,
+                         message: `A demo meeting was booked.\nName: ${fc.args.fullName}\nEmail: ${fc.args.emailAddress}\nMobile: ${fc.args.mobileNumber}\nPreferred Time: ${fc.args.preferredTime}`
                        }) 
                      });
-                     setMode('success');
-                     sessionPromise.then(s => s.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "confirmed" } } }));
+                     
+                     if (response.ok) {
+                        setMode('success');
+                        sessionPromise.then(s => s.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "Meeting booked successfully. Confirmation email sent." } } }));
+                     } else {
+                        throw new Error("FormSubmit failed");
+                     }
                    } catch (e) { 
+                     console.error("Booking error:", e);
                      setMode('error');
-                     setErrorMsg("Meeting booking failed.");
+                     setErrorMsg("Meeting booking failed. Please try again later.");
                    }
                 }
               }
@@ -346,7 +320,7 @@ export const AiAssistant: React.FC = () => {
                     <img src={AGENT_IMAGE} alt="Consultant" className="w-full h-full object-cover" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-bold text-[13px] tracking-tight">Cheshta IT</span>
+                    <span className="font-bold text-[13px] tracking-tight">Cheshta AI</span>
                   </div>
                </div>
                <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-white/10 rounded-full transition-colors">
@@ -422,6 +396,7 @@ export const AiAssistant: React.FC = () => {
                     <div className="text-center">
                        <CheckCircle size={40} className="text-emerald-500 mx-auto mb-4" />
                        <h4 className="font-bold text-[#1a1a3a] text-sm">Meeting Scheduled!</h4>
+                       <p className="text-[11px] text-slate-400 mt-2">Aapko jald hi confirmation mil jayega.</p>
                        <button onClick={endSession} className="mt-6 w-full py-3 bg-slate-100 text-[#1a1a3a] rounded-xl text-[11px] font-bold">Close</button>
                     </div>
                   )}
