@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleGenAI, FunctionDeclaration, Type, LiveServerMessage, Modality, Blob } from "@google/genai";
 import { 
   X, CheckCircle, Phone, AlertCircle, 
-  ChevronDown, Mic, RefreshCw, MicOff
+  ChevronDown, Mic, RefreshCw, MicOff, Mail
 } from 'lucide-react';
 
 // --- AUDIO UTILITIES ---
@@ -89,6 +89,9 @@ CONVERSATION FLOW:
 4. Demo Offer: Pitch the FREE 10-minute demo. "Hum aapke business ka audit karenge aur ek growth roadmap share karenge."
 5. Booking: Collect Name, Mobile, Email, and Preferred Time ONE BY ONE.
 6. Execution: Once all 4 are collected, call 'bookDemoMeeting'.
+
+AFTER BOOKING:
+• Tell the user: "Mubarak ho! Aapka demo book ho gaya hai. Maine aapke email par saari details bhej di hain. Hum jald hi aapse contact karenge."
 
 RULES:
 • ONE QUESTION AT A TIME. 
@@ -191,10 +194,9 @@ export const AiAssistant: React.FC = () => {
             scriptProcessor.connect(inputCtx.destination);
 
             // Initial trigger
-            sessionPromise.then(s => s.sendRealtimeInput({ text: "Gently greet the user and ask for their business name or type." }));
+            sessionPromise.then(s => s.sendRealtimeInput({ text: "Gently greet the user and ask for their business name or type to start the consultation." }));
           },
           onmessage: async (message: LiveServerMessage) => {
-            // Handle Interruption
             if (message.serverContent?.interrupted) {
               for (const source of audioSources.current) {
                 try { source.stop(); } catch(e) {}
@@ -211,6 +213,7 @@ export const AiAssistant: React.FC = () => {
             if (message.toolCall) {
               for (const fc of message.toolCall.functionCalls) {
                 if (fc.name === 'bookDemoMeeting') {
+                  console.log("Booking demo for:", fc.args);
                   try {
                     const response = await fetch('https://formsubmit.co/ajax/kamleshg9569@gmail.com', {
                       method: 'POST',
@@ -220,18 +223,27 @@ export const AiAssistant: React.FC = () => {
                         phone: fc.args.mobileNumber,
                         email: fc.args.emailAddress,
                         time: fc.args.preferredTime,
-                        _subject: "AI Consultant: New Demo Booked"
+                        _subject: `Cheshta AI Lead: ${fc.args.fullName}`,
+                        _captcha: "false",
+                        _template: "table"
                       })
                     });
+                    
+                    const result = await response.json();
+                    console.log("Email Result:", result);
+
                     if (response.ok) {
                       setMode('success');
                       sessionPromise.then(s => s.sendToolResponse({
-                        functionResponses: { id: fc.id, name: fc.name, response: { result: "Demo booked successfully." } }
+                        functionResponses: { id: fc.id, name: fc.name, response: { result: "Success! Demo booked and email sent to the owner." } }
                       }));
+                    } else {
+                      throw new Error(result.message || "Failed to send email");
                     }
-                  } catch (e) {
+                  } catch (e: any) {
+                    console.error("Fetch Error:", e);
                     setMode('error');
-                    setErrorMsg("Booking failed. Please retry.");
+                    setErrorMsg("Email sending failed. Please verify your FormSubmit activation.");
                   }
                 }
               }
@@ -250,7 +262,11 @@ export const AiAssistant: React.FC = () => {
               audioSources.current.add(source);
             }
           },
-          onerror: () => { setMode('error'); setErrorMsg("Session interrupted."); },
+          onerror: (e) => { 
+            console.error("Live Error:", e);
+            setMode('error'); 
+            setErrorMsg("Connection issue. Please retry."); 
+          },
           onclose: () => setIsListening(false),
         },
         config: {
@@ -264,7 +280,7 @@ export const AiAssistant: React.FC = () => {
       sessionRef.current = await sessionPromise;
     } catch (err: any) { 
       setMode('error'); 
-      setErrorMsg("Mic access is required.");
+      setErrorMsg("Microphone permission required.");
     }
   };
 
@@ -301,7 +317,7 @@ export const AiAssistant: React.FC = () => {
                   <div className="flex flex-col">
                     <span className="font-bold text-[13px] tracking-tight">Cheshta AI</span>
                     <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Live Now
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Consultant Online
                     </span>
                   </div>
                </div>
@@ -324,7 +340,7 @@ export const AiAssistant: React.FC = () => {
                   </motion.div>
                 </div>
                 
-                <h3 className="text-[#1a1a3a] font-bold text-base mb-1">AI Business Consultant</h3>
+                <h3 className="text-[#1a1a3a] font-bold text-base mb-1">Business Consultant</h3>
 
                 <div className="w-full flex-1 flex flex-col items-center justify-center min-h-[200px]">
                   {mode === 'intro' && (
@@ -337,7 +353,7 @@ export const AiAssistant: React.FC = () => {
                         className="w-full py-4 bg-[#1a1a3a] text-white font-bold rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all shadow-xl shadow-slate-200"
                       >
                          <Mic size={18} />
-                         <span>Baat Shuru Karein</span>
+                         <span>Consultation Shuru Karein</span>
                       </button>
                     </div>
                   )}
@@ -355,11 +371,11 @@ export const AiAssistant: React.FC = () => {
                             />
                           ))}
                         </div>
-                        <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest">Consultant is Online</p>
+                        <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest">Listening...</p>
                        </div>
                        
                        <div className="px-4 py-3 bg-slate-50 rounded-2xl text-slate-500 text-[10px] text-center max-w-full italic shadow-sm border border-slate-100 min-h-[40px] flex items-center justify-center">
-                         {userSpeechText ? `"${userSpeechText}"` : "Waiting for you to speak..."}
+                         {userSpeechText ? `"${userSpeechText}"` : "Please speak into your microphone..."}
                        </div>
 
                        <button onClick={endSession} className="w-14 h-14 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all">
@@ -376,11 +392,15 @@ export const AiAssistant: React.FC = () => {
                   )}
 
                   {mode === 'success' && (
-                    <div className="text-center">
+                    <div className="text-center bg-emerald-50/50 p-6 rounded-[2rem] border border-emerald-100">
                        <CheckCircle size={44} className="text-emerald-500 mx-auto mb-4" />
-                       <h4 className="font-bold text-[#1a1a3a] text-sm uppercase">Demo Confirmed!</h4>
-                       <p className="text-[11px] text-slate-500 mt-2">Hum aapse jald contact karenge. Email check karein.</p>
-                       <button onClick={endSession} className="mt-8 w-full py-3 bg-[#1a1a3a] text-white rounded-xl text-[11px] font-bold">Close</button>
+                       <h4 className="font-bold text-[#1a1a3a] text-sm uppercase">Booking Confirmed!</h4>
+                       <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                         Demo book ho gaya hai. 
+                         <br /><br />
+                         <span className="text-blue-600 font-bold">Important:</span> Agar pehli baar hai, toh kamleshg9569@gmail.com par **FormSubmit** ka email check karein aur **Activate** button par click karein. Tabhi aapko future leads milengi.
+                       </p>
+                       <button onClick={endSession} className="mt-8 w-full py-3 bg-[#1a1a3a] text-white rounded-xl text-[11px] font-bold">Close Session</button>
                     </div>
                   )}
 
@@ -388,7 +408,9 @@ export const AiAssistant: React.FC = () => {
                     <div className="text-center w-full px-4">
                        <AlertCircle size={40} className="text-red-500 mx-auto mb-4" />
                        <p className="text-[11px] text-slate-600 mb-6 font-medium">{errorMsg}</p>
-                       <button onClick={startVoiceSession} className="w-full py-3 bg-[#1a1a3a] text-white rounded-xl text-[11px] font-bold">Try Again</button>
+                       <button onClick={startVoiceSession} className="w-full py-3 bg-[#1a1a3a] text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-2">
+                         <RefreshCw size={14} /> Reconnect Call
+                       </button>
                     </div>
                   )}
                 </div>
