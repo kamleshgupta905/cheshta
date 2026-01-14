@@ -26,6 +26,23 @@ const FeatureItem = ({ icon: Icon, title, desc }: { icon: any, title: string, de
   </div>
 );
 
+const WhatsAppButton = () => (
+  <a 
+    href="https://wa.me/919876543210" 
+    target="_blank" 
+    rel="noopener noreferrer"
+    className="fixed bottom-32 right-8 z-[90] group"
+  >
+    <div className="absolute inset-0 bg-green-500 rounded-full blur-xl opacity-40 group-hover:opacity-70 transition-opacity animate-pulse" />
+    <div className="relative w-14 h-14 bg-gradient-to-tr from-green-600 to-green-400 rounded-full flex items-center justify-center text-white shadow-2xl border border-white/20 hover:scale-110 transition-transform active:scale-95">
+      <MessageSquare size={28} fill="currentColor" />
+    </div>
+    <div className="absolute right-20 top-1/2 -translate-y-1/2 px-4 py-2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-lg border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+      WhatsApp Support
+    </div>
+  </a>
+);
+
 const App: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -55,7 +72,8 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-blue-600 selection:text-white font-sans relative">
       
-      {/* AI Assistant Hub (Replaces old WhatsApp button) */}
+      {/* Floating Action Elements */}
+      <WhatsAppButton />
       <AiAssistant />
 
       {/* Navigation */}
@@ -254,7 +272,6 @@ const App: React.FC = () => {
                     An ISO 9001:2015 certified IT solutions provider delivering excellence in software development and digital transformation.
                 </p>
                 <div className="flex gap-4">
-                    {/* Social Icon Placeholders */}
                     {[1,2,3,4].map(i => <div key={i} className="w-10 h-10 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all cursor-pointer">?</div>)}
                 </div>
             </div>
@@ -291,7 +308,7 @@ const App: React.FC = () => {
       {/* Scroll to Top Button */}
       <button
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        className={`fixed bottom-8 right-8 z-40 p-4 bg-slate-800 text-white rounded-full shadow-2xl border border-slate-700 hover:bg-blue-600 hover:border-blue-500 transition-all duration-500 transform ${
+        className={`fixed bottom-8 left-8 z-40 p-4 bg-slate-800 text-white rounded-full shadow-2xl border border-slate-700 hover:bg-blue-600 hover:border-blue-500 transition-all duration-500 transform ${
           showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
         }`}
       >
