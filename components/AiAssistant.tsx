@@ -125,6 +125,15 @@ export const AiAssistant: React.FC = () => {
   const inputCtxRef = useRef<AudioContext | null>(null);
   const outputCtxRef = useRef<AudioContext | null>(null);
 
+  // Notify parent window when the assistant opens or closes
+  useEffect(() => {
+    if (isOpen) {
+      window.parent.postMessage('ai_assistant_opened', '*');
+    } else {
+      window.parent.postMessage('ai_assistant_closed', '*');
+    }
+  }, [isOpen]);
+
   const monitorAudio = () => {
     if (analyserRef.current) {
       const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
@@ -194,12 +203,10 @@ export const AiAssistant: React.FC = () => {
     setErrorMsg('');
     
     try {
-      // Check if API key is selected (for environments where this is applicable)
       if ((window as any).aistudio && !(await (window as any).aistudio.hasSelectedApiKey())) {
         await (window as any).aistudio.openSelectKey();
       }
 
-      // 1. Initialize Audio Contexts
       const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       inputCtxRef.current = inputCtx;
@@ -213,21 +220,19 @@ export const AiAssistant: React.FC = () => {
       await inputCtx.resume();
       await outputCtx.resume();
 
-      // 2. Request Microphone Access
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
       } catch (micErr) {
         setMode('error');
-        setErrorMsg("Microphone access denied. Please allow camera/mic permissions.");
+        setErrorMsg("Microphone access denied. Please allow permissions.");
         return;
       }
 
       setMode('voice');
       setIsListening(true);
 
-      // 3. Initialize Gemini AI
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const sessionPromise = ai.live.connect({
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
@@ -281,9 +286,8 @@ export const AiAssistant: React.FC = () => {
                      setMode('success');
                      sessionPromise.then(s => s.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "confirmed" } } }));
                    } catch (e) { 
-                     console.error("Booking failed", e);
                      setMode('error');
-                     setErrorMsg("Meeting booking failed. Our servers might be busy.");
+                     setErrorMsg("Meeting booking failed.");
                    }
                 }
               }
@@ -301,23 +305,12 @@ export const AiAssistant: React.FC = () => {
                 source.start(startTime);
                 nextStartTimeRef.current = startTime + buffer.duration;
                 audioSources.current.add(source);
-              } catch (decodeErr) {
-                console.error("Audio decoding error", decodeErr);
-              }
+              } catch (decodeErr) {}
             }
           },
           onerror: (e: any) => {
-            console.error("Gemini Live Error:", e);
-            if (e.message?.includes("entity")) {
-              setMode('key-needed');
-              setErrorMsg("API Key validation failed. Please check your billing settings.");
-            } else if (e.message?.includes("connection")) {
-              setMode('error');
-              setErrorMsg("Connection lost. Please check your internet.");
-            } else {
-              setMode('error');
-              setErrorMsg("Something went wrong with the AI session.");
-            }
+            setMode('error');
+            setErrorMsg("Connection error occurred.");
           },
           onclose: () => setIsListening(false),
         },
@@ -331,21 +324,20 @@ export const AiAssistant: React.FC = () => {
       });
       sessionRef.current = await sessionPromise;
     } catch (err: any) { 
-      console.error("Startup error:", err);
       setMode('error'); 
-      setErrorMsg(err.message || "Failed to start consultant session.");
+      setErrorMsg(err.message || "Failed to start.");
     }
   };
 
   return (
-    <div className="fixed bottom-8 right-8 z-[100] flex flex-col items-end gap-4">
+    <div className="fixed bottom-0 right-0 z-[100] flex flex-col items-end p-4">
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 30 }}
+            initial={{ opacity: 0, scale: 0.9, y: 30, originX: 1, originY: 1 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 30 }}
-            className="w-[calc(100vw-3rem)] sm:w-[310px] h-[480px] bg-white rounded-[2.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] flex flex-col overflow-hidden border border-slate-100"
+            className="w-[calc(100vw-2rem)] sm:w-[320px] h-[520px] bg-white rounded-[2.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] flex flex-col overflow-hidden border border-slate-100 mb-4"
           >
             {/* Header */}
             <div className="bg-[#1a1a3a] px-5 py-3.5 flex justify-between items-center text-white shrink-0">
@@ -355,20 +347,14 @@ export const AiAssistant: React.FC = () => {
                   </div>
                   <div className="flex flex-col">
                     <span className="font-bold text-[13px] tracking-tight">Cheshta IT</span>
-                    <div className="flex items-center gap-1">
-                       <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
-                       <span className={`text-[9px] font-bold uppercase tracking-wider leading-none ${isListening ? 'text-emerald-400' : 'text-slate-400'}`}>
-                         {isListening ? 'Speaking' : 'Online'}
-                       </span>
-                    </div>
                   </div>
                </div>
-               <button onClick={() => { setIsOpen(false); endSession(); }} className="p-1 hover:bg-white/10 rounded-full transition-colors">
+               <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-white/10 rounded-full transition-colors">
                  <ChevronDown size={20} />
                </button>
             </div>
 
-            <div className="flex-1 flex flex-col items-center bg-white px-6 py-6 text-center">
+            <div className="flex-1 flex flex-col items-center bg-white px-6 py-6 text-center overflow-y-auto">
               <div className="flex-1 flex flex-col items-center w-full">
                 <div className="relative mb-4">
                   <motion.div 
@@ -377,36 +363,20 @@ export const AiAssistant: React.FC = () => {
                     className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-[0_10px_30px_rgba(0,0,0,0.1)] relative"
                   >
                     <img src={AGENT_IMAGE} alt="Agent Big" className="w-full h-full object-cover" />
-                    {mode === 'voice' && (
-                       <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
-                          <motion.div 
-                            animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0.2, 0.5] }} 
-                            transition={{ repeat: Infinity, duration: 1 }}
-                            className="w-full h-full border-4 border-blue-400 rounded-full" 
-                          />
-                       </div>
-                    )}
                   </motion.div>
-                  <div className={`absolute bottom-1 right-1 w-5 h-5 rounded-full border-4 border-white shadow-sm transition-colors duration-300 ${isListening ? 'bg-emerald-400' : 'bg-slate-300'}`} />
                 </div>
                 
-                <h3 className="text-[#1a1a3a] font-bold text-base tracking-tight mb-1">AI Business Consultant</h3>
-                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-6">Empowering Your Growth</p>
+                <h3 className="text-[#1a1a3a] font-bold text-base mb-1">AI Business Consultant</h3>
 
-                <div className="w-full flex-1 flex flex-col items-center justify-center">
+                <div className="w-full flex-1 flex flex-col items-center justify-center min-h-[200px]">
                   {mode === 'intro' && (
-                    <div className="w-full px-2">
+                    <div className="w-full">
                       <p className="text-slate-500 text-xs mb-6 leading-relaxed">Book a FREE 10-minute demo to analyze your business growth strategy.</p>
                       <button 
                         onClick={startVoiceSession} 
-                        className="w-full py-4 bg-[#1a1a3a] hover:bg-[#252555] text-white font-bold rounded-2xl flex items-center justify-center gap-3 transition-all shadow-xl active:scale-95"
+                        className="w-full py-4 bg-[#1a1a3a] text-white font-bold rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all"
                       >
-                         <div className="flex gap-0.5 items-center">
-                           <motion.div animate={{ height: [8, 16, 8] }} transition={{ duration: 0.6, repeat: Infinity }} className="w-0.5 bg-emerald-400" />
-                           <motion.div animate={{ height: [14, 6, 14] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.1 }} className="w-0.5 bg-emerald-400" />
-                           <motion.div animate={{ height: [18, 10, 18] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }} className="w-0.5 bg-emerald-400" />
-                         </div>
-                         <span className="text-[14px]">Consult Now</span>
+                         <span>Start Voice Call</span>
                       </button>
                     </div>
                   )}
@@ -433,12 +403,9 @@ export const AiAssistant: React.FC = () => {
                           </motion.div>
                         )}
                        </AnimatePresence>
-                       <div className="flex items-center gap-4 mt-2">
-                          <button className="w-11 h-11 rounded-full border border-slate-100 flex items-center justify-center text-slate-300">
-                             <Mic size={18} />
-                          </button>
-                          <button onClick={endSession} className="w-11 h-11 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all">
-                             <Phone size={18} className="rotate-[135deg]" />
+                       <div className="flex items-center gap-4">
+                          <button onClick={endSession} className="w-12 h-12 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all">
+                             <Phone size={20} className="rotate-[135deg]" />
                           </button>
                        </div>
                     </div>
@@ -446,54 +413,33 @@ export const AiAssistant: React.FC = () => {
 
                   {mode === 'sending' && (
                     <div className="flex flex-col items-center gap-4">
-                       <div className="relative">
-                        <div className="w-12 h-12 border-4 border-slate-100 rounded-full" />
-                        <div className="absolute inset-0 w-12 h-12 border-4 border-[#1a1a3a] border-t-transparent rounded-full animate-spin" />
-                       </div>
-                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Initialising Session...</p>
+                       <div className="w-10 h-10 border-4 border-[#1a1a3a] border-t-transparent rounded-full animate-spin" />
+                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Initialising...</p>
                     </div>
                   )}
 
                   {mode === 'success' && (
-                    <div className="text-center px-4">
-                       <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle size={32} />
-                       </div>
+                    <div className="text-center">
+                       <CheckCircle size={40} className="text-emerald-500 mx-auto mb-4" />
                        <h4 className="font-bold text-[#1a1a3a] text-sm">Meeting Scheduled!</h4>
-                       <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">Booking confirmed. Please check your email for the meeting link.</p>
-                       <button onClick={endSession} className="mt-6 w-full py-3 bg-slate-100 text-[#1a1a3a] rounded-xl text-[11px] font-bold hover:bg-slate-200 transition-all">Close</button>
+                       <button onClick={endSession} className="mt-6 w-full py-3 bg-slate-100 text-[#1a1a3a] rounded-xl text-[11px] font-bold">Close</button>
                     </div>
                   )}
 
                   {(mode === 'error' || mode === 'key-needed') && (
-                    <div className="text-center px-4 w-full">
-                       <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                        {errorMsg.includes("Microphone") ? <MicOff size={32} /> : <AlertCircle size={32} />}
-                       </div>
-                       <h4 className="font-bold text-[#1a1a3a] text-sm">{mode === 'key-needed' ? 'Key Required' : 'Oops! Failed'}</h4>
-                       <p className="text-[10px] text-red-500/70 mt-2 leading-relaxed font-medium">{errorMsg || "An unexpected error occurred."}</p>
-                       
-                       <div className="flex flex-col gap-2 mt-6">
-                        <button 
-                          onClick={handleRetry} 
-                          className="w-full py-3 bg-[#1a1a3a] text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-2 hover:bg-[#252555] transition-all"
-                        >
-                          <RefreshCw size={14} /> Retry Session
-                        </button>
-                        <button 
-                          onClick={endSession} 
-                          className="w-full py-3 bg-slate-50 text-slate-400 rounded-xl text-[11px] font-bold hover:bg-slate-100 transition-all"
-                        >
-                          Cancel
-                        </button>
-                       </div>
+                    <div className="text-center w-full">
+                       <AlertCircle size={40} className="text-red-500 mx-auto mb-4" />
+                       <p className="text-[10px] text-red-500/70 mb-6 font-medium">{errorMsg}</p>
+                       <button onClick={handleRetry} className="w-full py-3 bg-[#1a1a3a] text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-2">
+                         <RefreshCw size={14} /> Try Again
+                       </button>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="mt-auto pt-4 border-t border-slate-50 w-full text-center">
-                 <p className="text-[9px] text-slate-300 font-medium flex items-center justify-center gap-1">
+              <div className="mt-auto pt-4 border-t border-slate-50 w-full">
+                 <p className="text-[9px] text-slate-300 font-medium">
                    Powered by <span className="text-[#1a1a3a] font-bold">Cheshta IT Solution</span>
                  </p>
               </div>
@@ -504,17 +450,17 @@ export const AiAssistant: React.FC = () => {
 
       <button 
         onClick={() => setIsOpen(!isOpen)} 
-        className="relative group w-20 h-20 transition-all duration-300 hover:scale-110 active:scale-95 z-[101]"
+        className="relative group w-16 h-16 transition-all duration-300 hover:scale-110 active:scale-95"
       >
-        <div className="absolute inset-0 bg-[#1a1a3a] rounded-full blur-2xl opacity-20 animate-pulse" />
+        <div className="absolute inset-0 bg-[#1a1a3a] rounded-full blur-xl opacity-20" />
         <div className={`relative w-full h-full rounded-full flex items-center justify-center shadow-2xl border-2 border-white transition-all duration-500 overflow-hidden ${isOpen ? 'rotate-90 bg-slate-900' : 'bg-white'}`}>
           <AnimatePresence mode="wait">
             {isOpen ? (
-              <motion.div key="close"><X size={36} className="text-white" /></motion.div>
+              <motion.div key="close"><X size={32} className="text-white" /></motion.div>
             ) : (
-              <motion.div key="avatar" className="w-full h-full relative">
+              <motion.div key="avatar" className="w-full h-full">
                 <img src={AGENT_IMAGE} alt="Avatar" className="w-full h-full object-cover" />
-                <div className={`absolute bottom-3 right-3 w-4 h-4 rounded-full border-2 border-white shadow-sm transition-colors duration-300 ${isListening ? 'bg-emerald-500 animate-ping' : 'bg-emerald-500'}`} />
+                <div className={`absolute bottom-2 right-2 w-3 h-3 rounded-full border-2 border-white shadow-sm bg-emerald-500`} />
               </motion.div>
             )}
           </AnimatePresence>
