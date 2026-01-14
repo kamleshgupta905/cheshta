@@ -52,7 +52,7 @@ interface AvatarMetrics {
 
 const AGENT_IMAGE = "https://images.unsplash.com/photo-1589156280159-27698a70f29e?q=80&w=300&h=300&auto=format&fit=crop";
 
-// --- MAIN AI ASSISTANT ---
+// --- MAIN AI ASSISTANT TOOL ---
 const bookDemoTool: FunctionDeclaration = {
   name: 'bookDemoMeeting',
   description: 'Book a FREE 10-minute demo meeting with Cheshta IT Solution.',
@@ -68,20 +68,32 @@ const bookDemoTool: FunctionDeclaration = {
   },
 };
 
-const CHESHTA_SYSTEM_INSTRUCTION = `You are a female AI Business Consultant for Cheshta IT Solution.
-Your goal: Book a FREE 10-minute demo meeting with visitors.
+const CHESHTA_SYSTEM_INSTRUCTION = `You are a professional female AI Voice Business Consultant for Cheshta IT Solution.
+Your goal is to understand the visitor's business needs and book a FREE 10-minute demo.
 
-TONE: Friendly, Professional, Hinglish (Hindi + English). Use feminine Hindi grammar for yourself (e.g., "Main kar sakti hoon").
+LANGUAGE & TONE:
+• Speak in simple Hinglish (Hindi + English mix).
+• Friendly, confident, and sales-oriented but professional.
+• Never robotic; sound like a helpful human consultant.
+• Use feminine Hindi grammar (e.g., "Main aapki kaise help kar sakti hoon?").
 
-PROCESS:
-1. Greet as "Sir" (assume user is male).
-2. Ask about their business.
-3. Identify their problem (SEO, Web Dev, Ads).
-4. Pitch the FREE 10-minute demo.
-5. IF THEY AGREE, you MUST collect: Full Name, Mobile, Email, and Preferred Time.
-6. ONCE YOU HAVE ALL 4 DETAILS, immediately call the 'bookDemoMeeting' tool. DO NOT wait for more instructions.
+SERVICES YOU REPRESENT:
+• Digital Marketing: Website Design, Landing Pages, Google/FB Ads, SEO, SMM.
+• AI & Automation: AI Voice Bots, WhatsApp Chatbots, CRM Setup, Auto Follow-ups.
 
-CRITICAL: After booking, tell the user that "Meeting schedule ho gayi hai, aapko email mil jayega".`;
+CONVERSATION FLOW:
+1. Greet: "Namaste! Main Cheshta IT Solution ki AI Assistant hoon. Main aapki kaise help kar sakti hoon?"
+2. Ask about Business: "Aapka kis tarah ka business hai?"
+3. Ask about Challenge: "Growth ya marketing mein aapko sabse badi challenge kya aa rahi hai?"
+4. Offer Solution: Give a 1-sentence solution using our services.
+5. Offer Demo: Pitch the FREE 10-minute demo. Explain that we will analyze their business and share a growth roadmap.
+6. Book Lead: If they agree, collect Name, Mobile, Email, and Time ONE BY ONE.
+7. CALL THE TOOL: Once all 4 are collected, call 'bookDemoMeeting'.
+
+IMPORTANT:
+• One question at a time.
+• Be clear and concise.
+• Build trust for Cheshta IT Solution.`;
 
 export const AiAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -99,31 +111,6 @@ export const AiAssistant: React.FC = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const inputCtxRef = useRef<AudioContext | null>(null);
   const outputCtxRef = useRef<AudioContext | null>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      window.parent.postMessage('ai_assistant_opened', '*');
-    } else {
-      window.parent.postMessage('ai_assistant_closed', '*');
-    }
-  }, [isOpen]);
-
-  const monitorAudio = () => {
-    if (analyserRef.current) {
-      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-      analyserRef.current.getByteFrequencyData(dataArray);
-      let total = 0;
-      for (let i = 0; i < dataArray.length; i++) total += dataArray[i] / 255;
-      setMetrics({ volume: total / dataArray.length });
-    }
-    frameRef.current = requestAnimationFrame(monitorAudio);
-  };
-
-  useEffect(() => {
-    if (mode === 'voice') frameRef.current = requestAnimationFrame(monitorAudio);
-    else { if (frameRef.current) cancelAnimationFrame(frameRef.current); setMetrics({ volume: 0 }); }
-    return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
-  }, [mode]);
 
   const cleanupResources = () => {
     setIsListening(false);
@@ -196,7 +183,7 @@ export const AiAssistant: React.FC = () => {
         streamRef.current = stream;
       } catch (micErr) {
         setMode('error');
-        setErrorMsg("Microphone access denied. Please allow permissions.");
+        setErrorMsg("Microphone permission chahiye baat karne ke liye.");
         return;
       }
 
@@ -208,7 +195,7 @@ export const AiAssistant: React.FC = () => {
         model: 'gemini-2.5-flash-native-audio-preview-12-2025',
         callbacks: {
           onopen: () => {
-            const trigger = "Greet the visitor as 'Sir' and introduce yourself as Cheshta IT's AI Consultant. Ask about his business.";
+            const trigger = "Greet the user professionally as Cheshta IT's Consultant and ask about their business type.";
             sessionPromise.then(s => s.sendRealtimeInput({ text: trigger }));
             
             const source = inputCtx.createMediaStreamSource(stream);
@@ -234,35 +221,39 @@ export const AiAssistant: React.FC = () => {
             if (message.toolCall) {
               for (const fc of message.toolCall.functionCalls) {
                 if (fc.name === 'bookDemoMeeting') {
-                   console.log("Tool call detected:", fc.args);
-                   try {
-                     const response = await fetch('https://formsubmit.co/ajax/kamleshg9569@gmail.com', { 
-                       method: 'POST', 
-                       headers: { 
-                         'Content-Type': 'application/json',
-                         'Accept': 'application/json'
-                       }, 
-                       body: JSON.stringify({
-                         name: fc.args.fullName,
-                         email: fc.args.emailAddress,
-                         phone: fc.args.mobileNumber,
-                         time: fc.args.preferredTime,
-                         _subject: `New Lead: ${fc.args.fullName} via AI Chatbot`,
-                         message: `A demo meeting was booked.\nName: ${fc.args.fullName}\nEmail: ${fc.args.emailAddress}\nMobile: ${fc.args.mobileNumber}\nPreferred Time: ${fc.args.preferredTime}`
-                       }) 
-                     });
-                     
-                     if (response.ok) {
-                        setMode('success');
-                        sessionPromise.then(s => s.sendToolResponse({ functionResponses: { id: fc.id, name: fc.name, response: { result: "Meeting booked successfully. Confirmation email sent." } } }));
-                     } else {
-                        throw new Error("FormSubmit failed");
-                     }
-                   } catch (e) { 
-                     console.error("Booking error:", e);
-                     setMode('error');
-                     setErrorMsg("Meeting booking failed. Please try again later.");
-                   }
+                  try {
+                    // Send lead to Owner
+                    const response = await fetch('https://formsubmit.co/ajax/kamleshg9569@gmail.com', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                      body: JSON.stringify({
+                        name: fc.args.fullName,
+                        email: fc.args.emailAddress,
+                        phone: fc.args.mobileNumber,
+                        time: fc.args.preferredTime,
+                        _subject: `New Lead: ${fc.args.fullName} via AI Chatbot`,
+                        message: `A 10-minute demo has been booked.\n\nName: ${fc.args.fullName}\nEmail: ${fc.args.emailAddress}\nMobile: ${fc.args.mobileNumber}\nTime: ${fc.args.preferredTime}`
+                      })
+                    });
+
+                    if (response.ok) {
+                      setMode('success');
+                      sessionPromise.then(s => {
+                        s.sendToolResponse({
+                          functionResponses: {
+                            id: fc.id,
+                            name: fc.name,
+                            response: { result: "Success! Demo booked. Confirmation email sent to both user and owner." },
+                          }
+                        });
+                      });
+                    } else {
+                      throw new Error("Lead submission failed");
+                    }
+                  } catch (err) {
+                    setMode('error');
+                    setErrorMsg("Booking mein kuch error aaya. Please fir se try karein.");
+                  }
                 }
               }
             }
@@ -284,7 +275,7 @@ export const AiAssistant: React.FC = () => {
           },
           onerror: (e: any) => {
             setMode('error');
-            setErrorMsg("Connection error occurred.");
+            setErrorMsg("Connection issue. Please check your internet.");
           },
           onclose: () => setIsListening(false),
         },
@@ -299,9 +290,26 @@ export const AiAssistant: React.FC = () => {
       sessionRef.current = await sessionPromise;
     } catch (err: any) { 
       setMode('error'); 
-      setErrorMsg(err.message || "Failed to start.");
+      setErrorMsg(err.message || "Failed to start session.");
     }
   };
+
+  const monitorAudio = () => {
+    if (analyserRef.current) {
+      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+      analyserRef.current.getByteFrequencyData(dataArray);
+      let total = 0;
+      for (let i = 0; i < dataArray.length; i++) total += dataArray[i] / 255;
+      setMetrics({ volume: total / dataArray.length });
+    }
+    frameRef.current = requestAnimationFrame(monitorAudio);
+  };
+
+  useEffect(() => {
+    if (mode === 'voice') frameRef.current = requestAnimationFrame(monitorAudio);
+    else { if (frameRef.current) cancelAnimationFrame(frameRef.current); setMetrics({ volume: 0 }); }
+    return () => { if (frameRef.current) cancelAnimationFrame(frameRef.current); };
+  }, [mode]);
 
   return (
     <div className="fixed bottom-0 right-0 z-[100] flex flex-col items-end p-4">
@@ -314,13 +322,14 @@ export const AiAssistant: React.FC = () => {
             className="w-[calc(100vw-2rem)] sm:w-[320px] h-[520px] bg-white rounded-[2.5rem] shadow-[0_20px_60px_rgba(0,0,0,0.15)] flex flex-col overflow-hidden border border-slate-100 mb-4"
           >
             {/* Header */}
-            <div className="bg-[#1a1a3a] px-5 py-3.5 flex justify-between items-center text-white shrink-0">
+            <div className="bg-[#1a1a3a] px-5 py-4 flex justify-between items-center text-white shrink-0">
                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20">
+                  <div className="w-9 h-9 rounded-full overflow-hidden border border-white/20">
                     <img src={AGENT_IMAGE} alt="Consultant" className="w-full h-full object-cover" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="font-bold text-[13px] tracking-tight">Cheshta AI</span>
+                    <span className="font-bold text-[13px] tracking-tight uppercase">Cheshta AI</span>
+                    <span className="text-[9px] text-white/60 font-medium">Online Consultation</span>
                   </div>
                </div>
                <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-white/10 rounded-full transition-colors">
@@ -332,12 +341,17 @@ export const AiAssistant: React.FC = () => {
               <div className="flex-1 flex flex-col items-center w-full">
                 <div className="relative mb-4">
                   <motion.div 
-                    animate={mode === 'voice' ? { scale: [1, 1.05, 1] } : {}}
-                    transition={{ repeat: Infinity, duration: 2 }}
-                    className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-[0_10px_30px_rgba(0,0,0,0.1)] relative"
+                    animate={mode === 'voice' ? { scale: [1, 1.08, 1], boxShadow: `0 0 ${metrics.volume * 50}px rgba(37, 99, 235, 0.3)` } : {}}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-xl relative"
                   >
                     <img src={AGENT_IMAGE} alt="Agent Big" className="w-full h-full object-cover" />
                   </motion.div>
+                  {mode === 'voice' && (
+                    <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[8px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest">
+                      Live
+                    </div>
+                  )}
                 </div>
                 
                 <h3 className="text-[#1a1a3a] font-bold text-base mb-1">AI Business Consultant</h3>
@@ -345,12 +359,15 @@ export const AiAssistant: React.FC = () => {
                 <div className="w-full flex-1 flex flex-col items-center justify-center min-h-[200px]">
                   {mode === 'intro' && (
                     <div className="w-full">
-                      <p className="text-slate-500 text-xs mb-6 leading-relaxed">Book a FREE 10-minute demo to analyze your business growth strategy.</p>
+                      <p className="text-slate-500 text-[11px] mb-8 leading-relaxed max-w-[200px] mx-auto">
+                        Hamare digital marketing aur AI expert se <strong>FREE 10-minute demo</strong> book karein.
+                      </p>
                       <button 
                         onClick={startVoiceSession} 
-                        className="w-full py-4 bg-[#1a1a3a] text-white font-bold rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all"
+                        className="w-full py-4 bg-[#1a1a3a] text-white font-bold rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all shadow-xl shadow-slate-200"
                       >
-                         <span>Start Voice Call</span>
+                         <Mic size={18} />
+                         <span>Start Conversation</span>
                       </button>
                     </div>
                   )}
@@ -358,28 +375,35 @@ export const AiAssistant: React.FC = () => {
                   {mode === 'voice' && (
                     <div className="flex flex-col items-center gap-6 w-full">
                        <div className="space-y-1">
-                        <p className="text-slate-400 text-xs font-medium italic">Consultant is speaking...</p>
-                        <div className="flex justify-center gap-1">
-                          {[1,2,3,4,5].map(i => (
+                        <div className="flex justify-center gap-1.5 h-6 items-center">
+                          {[1,2,3,4,5,6,7].map(i => (
                             <motion.div 
                               key={i} 
-                              animate={{ height: metrics.volume > 0.05 ? [4, 12, 4] : [4, 4, 4] }} 
-                              transition={{ duration: 0.5, repeat: Infinity, delay: i * 0.1 }}
+                              animate={{ height: metrics.volume > 0.05 ? [4, 16, 4] : [4, 4, 4] }} 
+                              transition={{ duration: 0.4, repeat: Infinity, delay: i * 0.05 }}
                               className="w-1 bg-blue-500 rounded-full" 
                             />
                           ))}
                         </div>
+                        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-2">Listening...</p>
                        </div>
-                       <AnimatePresence>
+                       
+                       <AnimatePresence mode="wait">
                         {userSpeechText && (
-                          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="px-4 py-3 bg-slate-50 rounded-2xl text-slate-500 text-[11px] text-center max-w-full italic shadow-sm border border-slate-100 line-clamp-2">
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10 }} 
+                            animate={{ opacity: 1, y: 0 }} 
+                            exit={{ opacity: 0 }}
+                            className="px-4 py-3 bg-slate-50 rounded-2xl text-slate-500 text-[11px] text-center max-w-full italic shadow-sm border border-slate-100 line-clamp-2"
+                          >
                             "{userSpeechText}"
                           </motion.div>
                         )}
                        </AnimatePresence>
+
                        <div className="flex items-center gap-4">
-                          <button onClick={endSession} className="w-12 h-12 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all">
-                             <Phone size={20} className="rotate-[135deg]" />
+                          <button onClick={endSession} className="w-14 h-14 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all">
+                             <Phone size={24} className="rotate-[135deg]" />
                           </button>
                        </div>
                     </div>
@@ -387,26 +411,28 @@ export const AiAssistant: React.FC = () => {
 
                   {mode === 'sending' && (
                     <div className="flex flex-col items-center gap-4">
-                       <div className="w-10 h-10 border-4 border-[#1a1a3a] border-t-transparent rounded-full animate-spin" />
-                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Initialising...</p>
+                       <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Initialising Consultant...</p>
                     </div>
                   )}
 
                   {mode === 'success' && (
-                    <div className="text-center">
+                    <div className="text-center bg-emerald-50/50 p-6 rounded-3xl border border-emerald-100">
                        <CheckCircle size={40} className="text-emerald-500 mx-auto mb-4" />
-                       <h4 className="font-bold text-[#1a1a3a] text-sm">Meeting Scheduled!</h4>
-                       <p className="text-[11px] text-slate-400 mt-2">Aapko jald hi confirmation mil jayega.</p>
-                       <button onClick={endSession} className="mt-6 w-full py-3 bg-slate-100 text-[#1a1a3a] rounded-xl text-[11px] font-bold">Close</button>
+                       <h4 className="font-bold text-[#1a1a3a] text-sm uppercase">Booking Confirmed!</h4>
+                       <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                         Details aapke aur hamare email par bhej di gayi hain. Hum aapse jald contact karenge!
+                       </p>
+                       <button onClick={endSession} className="mt-8 w-full py-3 bg-white border border-emerald-200 text-emerald-600 rounded-xl text-[11px] font-bold hover:bg-emerald-50 transition-colors">Done</button>
                     </div>
                   )}
 
                   {(mode === 'error' || mode === 'key-needed') && (
-                    <div className="text-center w-full">
+                    <div className="text-center w-full px-4">
                        <AlertCircle size={40} className="text-red-500 mx-auto mb-4" />
-                       <p className="text-[10px] text-red-500/70 mb-6 font-medium">{errorMsg}</p>
+                       <p className="text-[11px] text-slate-600 mb-6 font-medium">{errorMsg}</p>
                        <button onClick={handleRetry} className="w-full py-3 bg-[#1a1a3a] text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-2">
-                         <RefreshCw size={14} /> Try Again
+                         <RefreshCw size={14} /> Retry Consultation
                        </button>
                     </div>
                   )}
@@ -414,8 +440,8 @@ export const AiAssistant: React.FC = () => {
               </div>
 
               <div className="mt-auto pt-4 border-t border-slate-50 w-full">
-                 <p className="text-[9px] text-slate-300 font-medium">
-                   Powered by <span className="text-[#1a1a3a] font-bold">Cheshta IT Solution</span>
+                 <p className="text-[10px] text-slate-300 font-medium text-center italic">
+                   "Building Businesses with AI & Digital Strategy"
                  </p>
               </div>
             </div>
@@ -427,7 +453,7 @@ export const AiAssistant: React.FC = () => {
         onClick={() => setIsOpen(!isOpen)} 
         className="relative group w-16 h-16 transition-all duration-300 hover:scale-110 active:scale-95"
       >
-        <div className="absolute inset-0 bg-[#1a1a3a] rounded-full blur-xl opacity-20" />
+        <div className="absolute inset-0 bg-[#1a1a3a] rounded-full blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
         <div className={`relative w-full h-full rounded-full flex items-center justify-center shadow-2xl border-2 border-white transition-all duration-500 overflow-hidden ${isOpen ? 'rotate-90 bg-slate-900' : 'bg-white'}`}>
           <AnimatePresence mode="wait">
             {isOpen ? (
@@ -435,7 +461,7 @@ export const AiAssistant: React.FC = () => {
             ) : (
               <motion.div key="avatar" className="w-full h-full">
                 <img src={AGENT_IMAGE} alt="Avatar" className="w-full h-full object-cover" />
-                <div className={`absolute bottom-2 right-2 w-3 h-3 rounded-full border-2 border-white shadow-sm bg-emerald-500`} />
+                <div className={`absolute bottom-2 right-2 w-3.5 h-3.5 rounded-full border-2 border-white shadow-sm bg-emerald-500 animate-pulse`} />
               </motion.div>
             )}
           </AnimatePresence>
