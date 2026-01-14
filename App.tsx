@@ -51,7 +51,11 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('embed') === 'true') {
       setIsEmbed(true);
+      // Force transparency on body and html for the iframe
+      document.body.style.background = 'transparent';
       document.body.style.backgroundColor = 'transparent';
+      document.documentElement.style.background = 'transparent';
+      document.documentElement.style.backgroundColor = 'transparent';
     }
 
     const handleScroll = () => {
@@ -74,11 +78,13 @@ const App: React.FC = () => {
     }
   };
 
-  // If in embed mode, only return the AI Assistant
+  // If in embed mode, only return the AI Assistant with no background
   if (isEmbed) {
     return (
-      <div className="w-full h-screen bg-transparent overflow-hidden flex items-end justify-end">
-        <AiAssistant />
+      <div className="w-full h-screen bg-transparent overflow-hidden flex items-end justify-end pointer-events-none">
+        <div className="pointer-events-auto">
+          <AiAssistant />
+        </div>
       </div>
     );
   }
